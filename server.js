@@ -38,35 +38,117 @@ let gameState = {
     currentPlayer: 1,
     cards: [...valorantMaps],
     removedCards: [],
-    gameActive: true,
+    gameActive: false,
     players: {},
+    captains: {},
     lastCard: false
 };
 
 io.on('connection', (socket) => {
     console.log('Новый игрок подключился:', socket.id);
     
-    // Назначаем номер игрока (1 или 2)
-    const playerNumbers = Object.values(gameState.players).map(p => p.playerNumber);
-    const playerNumber = !playerNumbers.includes(1) ? 1 : !playerNumbers.includes(2) ? 2 : 0;
-    
-    gameState.players[socket.id] = { playerNumber, ready: true };
-    
-    console.log(`Игрок ${socket.id} назначен как Игрок ${playerNumber}`);
-    
-    // Отправляем состояние игры новому игроку
+    // Отправляем текущее состояние новому игроку
     socket.emit('gameState', gameState);
-    socket.emit('playerAssigned', playerNumber);
+    socket.emit('playersUpdate', gameState.players);
+    socket.emit('captainsUpdate', gameState.captains);
     
-    // Уведомляем всех об обновлении
-    io.emit('playersUpdate', Object.values(gameState.players).filter(p => p.playerNumber > 0).length);
+    // Обработка присоединения к игре
+    socket.on('joinGame', (nickname) => {
+        // Назначаем номер игрока
+        const playerNumbers = Object.values(gameState.players).map(p => p.playerNumber);
+        const playerNumber = !playerNumbers.includes(1) ? 1 : !playerNumbers.includes(2) ? 2 : 0;
+        
+        // Проверяем, является ли игрок капитаном
+        const isCaptain = Object.keys(gameState.captains).length < 2 && playerNumber <= 2;
+        
+        gameState.players[socket.id] = { 
+            id: socket.id,
+            nickname, 
+            playerNumber, 
+            isCaptain,
+            ready: true 
+        };
+        
+        // Если игрок капитан, добавляем в список капитанов
+        if (isCaptain) {
+            gameState.captains[socket.id] = {
+                id: socket.id,
+                nickname,
+                playerNumber
+            };
+        }
+        
+        console.log(`Игрок ${socket.id} (${nickname}) назначен как Игрок ${playerNumber}, Капитан: ${isCaptain}`);
+        
+        // Отправляем данные игроку
+        socket.emit('playerAssigned', { playerNumber, isCaptain });
+        
+        // Уведомляем всех об обновлении
+        io.emit('playersUpdate', gameState.players);
+        io.emit('captainsUpdate', gameState.captains);
+        
+        // Активируем игру если есть два капитана
+        if (Object.keys(gameState.captains).length >= 2 && !gameState.gameActive) {
+            gameState.gameActive = true;
+            gameState.currentPlayer = 1;
+            io.emit('gameState', gameState);
+            console.log('Игра активирована, два капитана готовы');
+        }
+    });
+    
+    // Обработка запроса стать капитаном
+    socket.on('becomeCaptain', () => {
+        const player = gameState.players[socket.id];
+        
+        if (!player) {
+            socket.emit('error', 'Сначала присоединитесь к игре');
+            return;
+        }
+        
+        if (Object.keys(gameState.captains).length >= 2) {
+            socket.emit('error', 'Достигнут лимит капитанов');
+            return;
+        }
+        
+        if (gameState.captains[socket.id]) {
+            socket.emit('error', 'Вы уже капитан');
+            return;
+        }
+        
+        // Назначаем игрока капитаном
+        player.isCaptain = true;
+        gameState.captains[socket.id] = {
+            id: socket.id,
+            nickname: player.nickname,
+            playerNumber: player.playerNumber
+        };
+        
+        console.log(`Игрок ${player.nickname} стал капитаном`);
+        
+        // Уведомляем всех об обновлении
+        io.emit('playersUpdate', gameState.players);
+        io.emit('captainsUpdate', gameState.captains);
+        
+        // Активируем игру если есть два капитана
+        if (Object.keys(gameState.captains).length >= 2 && !gameState.gameActive) {
+            gameState.gameActive = true;
+            gameState.currentPlayer = 1;
+            io.emit('gameState', gameState);
+            console.log('Игра активирована, два капитана готовы');
+        }
+    });
     
     // Обработка удаления карты
     socket.on('removeCard', (cardId) => {
         if (!gameState.gameActive) return;
         
-        const playerNum = gameState.players[socket.id]?.playerNumber;
-        if (playerNum !== gameState.currentPlayer) {
+        const player = gameState.players[socket.id];
+        if (!player || !player.isCaptain) {
+            socket.emit('error', 'Только капитаны могут удалять карты!');
+            return;
+        }
+        
+        if (player.playerNumber !== gameState.currentPlayer) {
             socket.emit('error', 'Сейчас не ваш ход!');
             return;
         }
@@ -99,7 +181,7 @@ io.on('connection', (socket) => {
         
         // Рассылаем обновление всем клиентам
         io.emit('gameState', gameState);
-        console.log(`Игрок ${playerNum} удалил карту: ${removedCard.name}`);
+        console.log(`Капитан ${player.nickname} удалил карту: ${removedCard.name}`);
     });
     
     // Обработка сброса игры
@@ -108,8 +190,9 @@ io.on('connection', (socket) => {
             currentPlayer: 1,
             cards: [...valorantMaps],
             removedCards: [],
-            gameActive: true,
+            gameActive: Object.keys(gameState.captains).length >= 2,
             players: gameState.players,
+            captains: gameState.captains,
             lastCard: false
         };
         
@@ -120,12 +203,23 @@ io.on('connection', (socket) => {
     // Обработка отключения игрока
     socket.on('disconnect', () => {
         console.log('Игрок отключился:', socket.id);
+        
+        // Удаляем игрока из всех списков
         delete gameState.players[socket.id];
+        delete gameState.captains[socket.id];
         
-        const activePlayers = Object.values(gameState.players).filter(p => p.playerNumber > 0).length;
-        io.emit('playersUpdate', activePlayers);
+        // Если осталось меньше 2 капитанов, останавливаем игру
+        if (Object.keys(gameState.captains).length < 2 && gameState.gameActive) {
+            gameState.gameActive = false;
+            console.log('Игра приостановлена: недостаточно капитанов');
+        }
         
-        console.log(`Осталось игроков: ${activePlayers}`);
+        // Уведомляем всех об обновлении
+        io.emit('playersUpdate', gameState.players);
+        io.emit('captainsUpdate', gameState.captains);
+        io.emit('gameState', gameState);
+        
+        console.log(`Осталось игроков: ${Object.keys(gameState.players).length}`);
     });
 });
 
