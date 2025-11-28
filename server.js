@@ -41,7 +41,7 @@ let gameState = {
     gameActive: false,
     players: {},
     captains: {},
-    tournamentPlayers: {}, // Добавьте эту строку
+    tournamentPlayers: {},
     lastCard: false
 };
 
@@ -52,10 +52,13 @@ io.on('connection', (socket) => {
     socket.emit('gameState', gameState);
     socket.emit('playersUpdate', gameState.players);
     socket.emit('captainsUpdate', gameState.captains);
-    socket.emit('tournamentUpdate', gameState.tournamentPlayers); // Добавьте эту строку
+    socket.emit('tournamentUpdate', gameState.tournamentPlayers);
 
     // Обработка присоединения к игре
-    socket.on('joinGame', (nickname) => {
+    socket.on('joinGame', (data) => {
+        const nickname = data.nickname;
+        const deviceId = data.deviceId;
+        
         // Назначаем номер игрока (теперь все начинают как обычные игроки)
         const playerNumbers = Object.values(gameState.players).map(p => p.playerNumber);
         let playerNumber = 0;
@@ -73,17 +76,37 @@ io.on('connection', (socket) => {
             nickname, 
             playerNumber, 
             isCaptain: false,
+            deviceId: deviceId,
             ready: true 
         };
+
+        // Проверяем, был ли игрок зарегистрирован в турнире с этого устройства
+        let isInTournament = false;
+        if (deviceId) {
+            const existingTournamentPlayer = Object.values(gameState.tournamentPlayers).find(
+                p => p.deviceId === deviceId
+            );
+            if (existingTournamentPlayer) {
+                // Обновляем ID подключения для существующего игрока турнира
+                existingTournamentPlayer.id = socket.id;
+                existingTournamentPlayer.nickname = nickname;
+                isInTournament = true;
+            }
+        }
         
         console.log(`Игрок ${socket.id} (${nickname}) присоединился как Игрок ${playerNumber}`);
         
         // Отправляем данные игроку
-        socket.emit('playerAssigned', { playerNumber, isCaptain: false });
+        socket.emit('playerAssigned', { 
+            playerNumber, 
+            isCaptain: false,
+            isInTournament: isInTournament
+        });
         
         // Уведомляем всех об обновлении
         io.emit('playersUpdate', gameState.players);
         io.emit('captainsUpdate', gameState.captains);
+        io.emit('tournamentUpdate', gameState.tournamentPlayers);
     });
     
     // Обработка запроса стать капитаном
@@ -192,12 +215,23 @@ io.on('connection', (socket) => {
     });
 
     // Обработка регистрации на турнир
-    socket.on('joinTournament', () => {
+    socket.on('joinTournament', (deviceId) => {
         const player = gameState.players[socket.id];
         
         if (!player) {
             socket.emit('error', 'Сначала присоединитесь к игре');
             return;
+        }
+        
+        // Проверяем, не зарегистрирован ли уже с этого устройства
+        if (deviceId) {
+            const existingPlayer = Object.values(gameState.tournamentPlayers).find(
+                p => p.deviceId === deviceId
+            );
+            if (existingPlayer) {
+                socket.emit('error', 'Вы уже зарегистрированы с этого устройства');
+                return;
+            }
         }
         
         if (gameState.tournamentPlayers[socket.id]) {
@@ -215,6 +249,7 @@ io.on('connection', (socket) => {
             id: socket.id,
             nickname: player.nickname,
             playerNumber: player.playerNumber,
+            deviceId: deviceId,
             joinTime: new Date().toISOString()
         };
         
@@ -226,22 +261,80 @@ io.on('connection', (socket) => {
     });
 
     // Обработка отмены регистрации на турнир
-    socket.on('leaveTournament', () => {
+    socket.on('leaveTournament', (deviceId) => {
         const player = gameState.players[socket.id];
         
-        if (!player || !gameState.tournamentPlayers[socket.id]) {
+        if (!player) {
+            socket.emit('error', 'Сначала присоединитесь к игре');
+            return;
+        }
+        
+        // Ищем игрока в турнире по deviceId или socket.id
+        let tournamentPlayerId = socket.id;
+        if (deviceId) {
+            const playerByDevice = Object.entries(gameState.tournamentPlayers).find(
+                ([id, p]) => p.deviceId === deviceId
+            );
+            if (playerByDevice) {
+                tournamentPlayerId = playerByDevice[0];
+            }
+        }
+        
+        if (!gameState.tournamentPlayers[tournamentPlayerId]) {
             socket.emit('error', 'Вы не участвуете в турнире');
             return;
         }
         
         // Удаляем игрока из турнира
-        delete gameState.tournamentPlayers[socket.id];
+        delete gameState.tournamentPlayers[tournamentPlayerId];
         
         console.log(`Игрок ${player.nickname} покинул турнир 5x5`);
         
         // Уведомляем всех об обновлении
         io.emit('tournamentUpdate', gameState.tournamentPlayers);
         socket.broadcast.emit('info', `${player.nickname} покинул турнир 5x5`);
+    });
+
+    // Обработка сброса всего состояния
+    socket.on('resetAll', () => {
+        // Сохраняем только tournamentPlayers (участников турнира)
+        const savedTournamentPlayers = gameState.tournamentPlayers;
+        
+        gameState = {
+            currentPlayer: 1,
+            cards: [...valorantMaps],
+            removedCards: [],
+            gameActive: false,
+            players: {},
+            captains: {},
+            tournamentPlayers: savedTournamentPlayers, // Сохраняем участников турнира
+            lastCard: false
+        };
+        
+        io.emit('gameState', gameState);
+        io.emit('playersUpdate', gameState.players);
+        io.emit('captainsUpdate', gameState.captains);
+        console.log('Состояние игры сброшено, капитаны удалены');
+    });
+
+    // Обработка полного сброса (включая турнир)
+    socket.on('resetTournament', () => {
+        gameState = {
+            currentPlayer: 1,
+            cards: [...valorantMaps],
+            removedCards: [],
+            gameActive: false,
+            players: {},
+            captains: {},
+            tournamentPlayers: {}, // Полностью очищаем турнир
+            lastCard: false
+        };
+        
+        io.emit('gameState', gameState);
+        io.emit('playersUpdate', gameState.players);
+        io.emit('captainsUpdate', gameState.captains);
+        io.emit('tournamentUpdate', gameState.tournamentPlayers);
+        console.log('Полный сброс: турнир и капитаны очищены');
     });
     
     // Обработка удаления карты
@@ -299,7 +392,7 @@ io.on('connection', (socket) => {
             gameActive: Object.keys(gameState.captains).length >= 2,
             players: gameState.players,
             captains: gameState.captains,
-            tournamentPlayers: gameState.tournamentPlayers, // Сохраняем участников турнира
+            tournamentPlayers: gameState.tournamentPlayers,
             lastCard: false
         };
         
