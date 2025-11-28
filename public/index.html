@@ -539,18 +539,31 @@ const captainsSection = document.getElementById('captainsSection');
 const captainsList = document.getElementById('captainsList');
 const becomeCaptainBtn = document.getElementById('becomeCaptainBtn');
 
+// Добавьте в начало скрипта (после объявления переменных)
+console.log('Script loaded, modal element:', nicknameModal);
+
 // Обработчик ввода никнейма
 joinGameBtn.addEventListener('click', () => {
     const nickname = nicknameInput.value.trim();
+    console.log('Join button clicked, nickname:', nickname);
+    
     if (nickname.length < 2) {
         showNotification('Никнейм должен содержать минимум 2 символа', 'error');
         return;
     }
     
     myNickname = nickname;
+    console.log('Hiding modal, display before:', nicknameModal.style.display);
     nicknameModal.style.display = 'none';
+    console.log('Hiding modal, display after:', nicknameModal.style.display);
     socket.emit('joinGame', nickname);
     showNotification(`Вы вошли как: ${nickname}`, 'success');
+});
+// Также добавим обработчик нажатия Enter в поле ввода
+nicknameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        joinGameBtn.click();
+    }
 });
 
 // Также добавим обработчик нажатия Enter в поле ввода
