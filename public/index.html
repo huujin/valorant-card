@@ -6,6 +6,102 @@
     <title>Удаление карт Valorant - Мультиплеер</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
+        /* Стили для модального окна никнейма */
+#nicknameModal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#nicknameModal > div {
+    background: #1a1a2e;
+    padding: 30px;
+    border-radius: 10px;
+    border: 2px solid #ff4d4d;
+    max-width: 400px;
+    width: 90%;
+    box-shadow: 0 0 30px rgba(255, 77, 77, 0.3);
+}
+
+#nicknameInput {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ff4d4d;
+    border-radius: 5px;
+    background: rgba(255,255,255,0.1);
+    color: white;
+    font-size: 1rem;
+    margin-bottom: 20px;
+    transition: all 0.3s;
+}
+
+#nicknameInput:focus {
+    outline: none;
+    border-color: #ffcc00;
+    box-shadow: 0 0 10px rgba(255, 204, 0, 0.3);
+}
+
+#joinGameBtn {
+    width: 100%;
+    padding: 12px;
+    background: #ff4d4d;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: bold;
+}
+
+#joinGameBtn:hover {
+    background: #ff6666;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+/* Стили для боковой панели игроков */
+#playersSidebar {
+    position: fixed;
+    right: 0;
+    top: 0;
+    width: 250px;
+    height: 100vh;
+    background: rgba(26,26,46,0.95);
+    border-left: 1px solid rgba(255,77,77,0.3);
+    padding: 20px;
+    overflow-y: auto;
+    z-index: 100;
+    backdrop-filter: blur(10px);
+}
+
+.player-item {
+    padding: 10px;
+    margin-bottom: 8px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.1);
+    transition: all 0.3s;
+}
+
+.player-item:hover {
+    background: rgba(255,255,255,0.1);
+}
+
+.captain-item {
+    padding: 10px;
+    margin-bottom: 8px;
+    background: rgba(255,204,0,0.1);
+    border-radius: 5px;
+    border: 1px solid #ffcc00;
+}
         * {
             box-sizing: border-box;
             margin: 0;
@@ -455,6 +551,13 @@ joinGameBtn.addEventListener('click', () => {
     nicknameModal.style.display = 'none';
     socket.emit('joinGame', nickname);
     showNotification(`Вы вошли как: ${nickname}`, 'success');
+});
+
+// Также добавим обработчик нажатия Enter в поле ввода
+nicknameInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        joinGameBtn.click();
+    }
 });
 
 // Обработчик кнопки "Стать капитаном"

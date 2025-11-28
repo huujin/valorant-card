@@ -48,10 +48,16 @@ io.on('connection', (socket) => {
     console.log('Новый игрок подключился:', socket.id);
     
     // Отправляем текущее состояние новому игроку
-    socket.emit('gameState', gameState);
-    socket.emit('playersUpdate', gameState.players);
-    socket.emit('captainsUpdate', gameState.captains);
+    // socket.emit('gameState', gameState);
+    // socket.emit('playersUpdate', gameState.players);
+    // socket.emit('captainsUpdate', gameState.captains);
     
+    io.on('connection', (socket) => {
+    console.log('Новый игрок подключился:', socket.id);
+    
+    // Больше ничего не отправляем здесь - ждем пока игрок введет никнейм
+});
+
     // Обработка присоединения к игре
     socket.on('joinGame', (nickname) => {
         // Назначаем номер игрока
