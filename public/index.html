@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Удаление карт Valorant - Мультиплеер</title>
+    <title>Valorant Draft</title>
     <script src="/socket.io/socket.io.js"></script>
     <style>
         /* Все ваши стили остаются здесь */
@@ -506,7 +506,7 @@
         </div>
         
         <div style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-            <button id="becomeCaptainBtn" style="width: 100%; padding: 12px; background: #ffcc00; color: #333; border: none; border-radius: 5px; font-size: 0.9rem; cursor: pointer; margin-bottom: 10px; font-weight: bold; display: none;">Стать капитаном</button>
+            <button id="becomeCaptainBtn" style="width: 100%; padding: 12px; background: #ffcc00; color: #333; border: none; border-radius: 5px; font-size: 0.9rem; cursor: pointer; margin-bottom: 10px; font-weight: bold;">Стать капитаном</button>
             <button id="leaveCaptainBtn" style="width: 100%; padding: 12px; background: #666; color: white; border: none; border-radius: 5px; font-size: 0.9rem; cursor: pointer; display: none;">Перестать быть капитаном</button>
             <div style="font-size: 0.8rem; color: #ccc; text-align: center; margin-top: 10px;">
                 Капитанов: <span id="captainsCount">0</span>/2
@@ -523,8 +523,8 @@
 
     <div class="container">
         <header>
-            <h1>Удаление карт Valorant - Мультиплеер</h1>
-            <p class="subtitle">Играйте с другом на разных устройствах! Игра заканчивается, когда остаётся одна карта</p>
+            <h1>Драфт Valorant</h1>
+            <p class="subtitle">Капитаны, пожалуйста, займите слоты и убирайте карты</p>
             <div class="connection-info" id="connectionInfo">
                 Подключение к серверу...
             </div>
@@ -533,11 +533,11 @@
         <div class="game-area">
             <div class="player-info">
                 <div class="player" id="player1">
-                    <div class="player-name">Игрок 1 <span class="you-badge" id="youBadge1" style="display: none;">Вы</span></div>
+                    <div class="player-name">Капитан 1 <span class="you-badge" id="youBadge1" style="display: none;">Вы</span></div>
                     <div class="player-status">Ожидание игрока...</div>
                 </div>
                 <div class="player" id="player2">
-                    <div class="player-name">Игрок 2 <span class="you-badge" id="youBadge2" style="display: none;">Вы</span></div>
+                    <div class="player-name">Капитан 2 <span class="you-badge" id="youBadge2" style="display: none;">Вы</span></div>
                     <div class="player-status">Ожидание игрока...</div>
                 </div>
             </div>
