@@ -869,7 +869,7 @@ function updateCaptainButtons() {
         leaveCaptainBtn.disabled = false;
         leaveCaptainBtn.textContent = 'Перестать быть капитаном';
     } else {
-        becomeCaptainBtn.style.display = 'block';
+        becomeCaptainBtn.style.display = 'block'; // Убедитесь, что это 'block'
         leaveCaptainBtn.style.display = 'none';
         becomeCaptainBtn.disabled = captainsCount >= 2;
         
