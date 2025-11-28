@@ -48,58 +48,40 @@ io.on('connection', (socket) => {
     console.log('Новый игрок подключился:', socket.id);
     
     // Отправляем текущее состояние новому игроку
-    // socket.emit('gameState', gameState);
-    // socket.emit('playersUpdate', gameState.players);
-    // socket.emit('captainsUpdate', gameState.captains);
-    
-    io.on('connection', (socket) => {
-    console.log('Новый игрок подключился:', socket.id);
-    
-    // Больше ничего не отправляем здесь - ждем пока игрок введет никнейм
-});
+    socket.emit('gameState', gameState);
+    socket.emit('playersUpdate', gameState.players);
+    socket.emit('captainsUpdate', gameState.captains);
 
     // Обработка присоединения к игре
     socket.on('joinGame', (nickname) => {
-        // Назначаем номер игрока
+        // Назначаем номер игрока (теперь все начинают как обычные игроки)
         const playerNumbers = Object.values(gameState.players).map(p => p.playerNumber);
-        const playerNumber = !playerNumbers.includes(1) ? 1 : !playerNumbers.includes(2) ? 2 : 0;
+        let playerNumber = 0;
         
-        // Проверяем, является ли игрок капитаном
-        const isCaptain = Object.keys(gameState.captains).length < 2 && playerNumber <= 2;
+        // Находим свободный номер игрока
+        for (let i = 1; i <= Object.keys(gameState.players).length + 1; i++) {
+            if (!playerNumbers.includes(i)) {
+                playerNumber = i;
+                break;
+            }
+        }
         
         gameState.players[socket.id] = { 
             id: socket.id,
             nickname, 
             playerNumber, 
-            isCaptain,
+            isCaptain: false, // Все начинают не капитанами
             ready: true 
         };
         
-        // Если игрок капитан, добавляем в список капитанов
-        if (isCaptain) {
-            gameState.captains[socket.id] = {
-                id: socket.id,
-                nickname,
-                playerNumber
-            };
-        }
-        
-        console.log(`Игрок ${socket.id} (${nickname}) назначен как Игрок ${playerNumber}, Капитан: ${isCaptain}`);
+        console.log(`Игрок ${socket.id} (${nickname}) присоединился как Игрок ${playerNumber}`);
         
         // Отправляем данные игроку
-        socket.emit('playerAssigned', { playerNumber, isCaptain });
+        socket.emit('playerAssigned', { playerNumber, isCaptain: false });
         
         // Уведомляем всех об обновлении
         io.emit('playersUpdate', gameState.players);
         io.emit('captainsUpdate', gameState.captains);
-        
-        // Активируем игру если есть два капитана
-        if (Object.keys(gameState.captains).length >= 2 && !gameState.gameActive) {
-            gameState.gameActive = true;
-            gameState.currentPlayer = 1;
-            io.emit('gameState', gameState);
-            console.log('Игра активирована, два капитана готовы');
-        }
     });
     
     // Обработка запроса стать капитаном
@@ -112,7 +94,7 @@ io.on('connection', (socket) => {
         }
         
         if (Object.keys(gameState.captains).length >= 2) {
-            socket.emit('error', 'Достигнут лимит капитанов');
+            socket.emit('error', 'Достигнут лимит капитанов (2)');
             return;
         }
         
@@ -143,7 +125,62 @@ io.on('connection', (socket) => {
             console.log('Игра активирована, два капитана готовы');
         }
     });
+
+    // Обработка запроса перестать быть капитаном
+    socket.on('leaveCaptain', () => {
+        const player = gameState.players[socket.id];
+        
+        if (!player || !player.isCaptain) {
+            socket.emit('error', 'Вы не являетесь капитаном');
+            return;
+        }
+        
+        // Убираем игрока из капитанов
+        player.isCaptain = false;
+        delete gameState.captains[socket.id];
+        
+        console.log(`Игрок ${player.nickname} перестал быть капитаном`);
+        
+        // Останавливаем игру если капитанов стало меньше 2
+        if (Object.keys(gameState.captains).length < 2 && gameState.gameActive) {
+            gameState.gameActive = false;
+            console.log('Игра приостановлена: недостаточно капитанов');
+        }
+        
+        // Уведомляем всех об обновлении
+        io.emit('playersUpdate', gameState.players);
+        io.emit('captainsUpdate', gameState.captains);
+        io.emit('gameState', gameState);
+    });
+    // Добавьте этот обработчик в server.js после обработчика leaveCaptain
+socket.on('changeNickname', (newNickname) => {
+    const player = gameState.players[socket.id];
     
+    if (!player) {
+        socket.emit('error', 'Сначала присоединитесь к игре');
+        return;
+    }
+    
+    const oldNickname = player.nickname;
+    player.nickname = newNickname;
+    
+    // Обновляем никнейм в списке капитанов если игрок капитан
+    if (gameState.captains[socket.id]) {
+        gameState.captains[socket.id].nickname = newNickname;
+    }
+    
+    console.log(`Игрок ${oldNickname} сменил никнейм на ${newNickname}`);
+    
+    // Уведомляем всех об обновлении
+    io.emit('playersUpdate', gameState.players);
+    io.emit('captainsUpdate', gameState.captains);
+    
+    // Уведомляем самого игрока об успешной смене
+    socket.emit('nicknameChanged', { newNickname });
+    
+    // Уведомляем других игроков
+    socket.broadcast.emit('info', `Игрок ${oldNickname} сменил никнейм на ${newNickname}`);
+});
     // Обработка удаления карты
     socket.on('removeCard', (cardId) => {
         if (!gameState.gameActive) return;
