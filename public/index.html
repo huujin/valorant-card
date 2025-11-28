@@ -83,6 +83,38 @@
             backdrop-filter: blur(10px);
         }
 
+        /* Добавьте в секцию style */
+        #tournamentSection {
+            backdrop-filter: blur(10px);
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+        }
+
+        #joinTournamentBtn {
+            transition: all 0.3s;
+        }
+
+        #joinTournamentBtn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 255, 255, 0.3);
+        }
+
+        #joinTournamentBtn:disabled {
+            background: linear-gradient(135deg, #666, #888);
+            cursor: not-allowed;
+        }
+
+        #leaveTournamentBtn:hover {
+            background: #888;
+            transform: translateY(-2px);
+        }
+
+        .tournament-player {
+            transition: all 0.3s;
+        }
+
+        .tournament-player:hover {
+            background: rgba(0, 255, 255, 0.15) !important;
+        }
         .player-item {
             padding: 10px;
             margin-bottom: 8px;
@@ -520,7 +552,28 @@
             </div>
         </div>
     </div>
-
+    <!-- Секция регистрации на игру 5x5 -->
+    <div id="tournamentSection" style="position: fixed; left: 20px; top: 80px; width: 250px; background: rgba(26,26,46,0.95); border: 1px solid rgba(0,255,255,0.3); border-radius: 10px; padding: 15px; z-index: 99;">
+        <h3 style="color: #00ffff; margin-bottom: 15px; text-align: center; font-size: 1.1rem;">🎯 Игра 5x5</h3>
+        
+        <button id="joinTournamentBtn" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #00ffff, #0099cc); color: white; border: none; border-radius: 5px; font-size: 0.9rem; cursor: pointer; margin-bottom: 15px; font-weight: bold;">
+            Участвовать в 5x5
+        </button>
+        
+        <button id="leaveTournamentBtn" style="width: 100%; padding: 12px; background: #666; color: white; border: none; border-radius: 5px; font-size: 0.9rem; cursor: pointer; margin-bottom: 15px; display: none;">
+            Отменить участие
+        </button>
+        
+        <div style="font-size: 0.8rem; color: #00ffff; text-align: center; margin-bottom: 10px;">
+            Участников: <span id="tournamentCount">0</span>/10
+        </div>
+        
+        <div style="max-height: 200px; overflow-y: auto;">
+            <div id="tournamentPlayersList">
+                <!-- Список участников турнира будет здесь -->
+            </div>
+        </div>
+    </div>
     <div class="container">
         <header>
             <h1>Драфт Valorant</h1>
@@ -571,6 +624,8 @@ let currentPlayerNumber = 0;
 let victoryAnimationShown = false;
 let myNickname = '';
 let isCaptain = false;
+let isInTournament = false;
+let gameState = {};
 
 // Элементы DOM
 const connectionInfo = document.getElementById('connectionInfo');
@@ -602,6 +657,13 @@ const settingsModal = document.getElementById('settingsModal');
 const settingsNicknameInput = document.getElementById('settingsNicknameInput');
 const saveSettingsBtn = document.getElementById('saveSettingsBtn');
 const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+
+// Элементы турнира
+const tournamentSection = document.getElementById('tournamentSection');
+const joinTournamentBtn = document.getElementById('joinTournamentBtn');
+const leaveTournamentBtn = document.getElementById('leaveTournamentBtn');
+const tournamentCount = document.getElementById('tournamentCount');
+const tournamentPlayersList = document.getElementById('tournamentPlayersList');
 
 // Функция для сохранения никнейма в localStorage
 function saveNickname(nickname) {
@@ -652,7 +714,7 @@ joinGameBtn.addEventListener('click', () => {
     }
     
     myNickname = nickname;
-    saveNickname(nickname); // Сохраняем никнейм
+    saveNickname(nickname);
     console.log('Hiding modal, display before:', nicknameModal.style.display);
     nicknameModal.style.display = 'none';
     console.log('Hiding modal, display after:', nicknameModal.style.display);
@@ -712,6 +774,15 @@ leaveCaptainBtn.addEventListener('click', () => {
     socket.emit('leaveCaptain');
 });
 
+// Обработчики для турнира
+joinTournamentBtn.addEventListener('click', () => {
+    socket.emit('joinTournament');
+});
+
+leaveTournamentBtn.addEventListener('click', () => {
+    socket.emit('leaveTournament');
+});
+
 // Обработчики событий от сервера
 socket.on('connect', () => {
     console.log('Подключено к серверу');
@@ -733,6 +804,13 @@ socket.on('playerAssigned', (data) => {
     console.log(`Вы назначены как Игрок ${currentPlayerNumber}, Капитан: ${isCaptain}`);
     
     updateCaptainButtons();
+    becomeCaptainBtn.style.display = 'block';
+    
+    // Проверяем, участвует ли игрок в турнире
+    if (gameState.tournamentPlayers && gameState.tournamentPlayers[socket.id]) {
+        isInTournament = true;
+        updateTournamentButtons();
+    }
     
     if (isCaptain) {
         showNotification(`Вы стали капитаном! (Игрок ${currentPlayerNumber})`, 'success');
@@ -749,6 +827,11 @@ socket.on('playersUpdate', (players) => {
     
     if (connectedPlayers < 2) {
         statusElement.textContent = 'Ожидание игроков...';
+    }
+    
+    // Обновляем статусы онлайн в турнире
+    if (gameState.tournamentPlayers) {
+        updateTournamentList(gameState.tournamentPlayers);
     }
 });
 
@@ -774,7 +857,14 @@ socket.on('captainsUpdate', (captains) => {
 });
 
 socket.on('gameState', (state) => {
+    gameState = state;
     renderGame(state);
+    updateCaptainButtons();
+    
+    // Обновляем турнир если есть данные
+    if (state.tournamentPlayers) {
+        updateTournamentList(state.tournamentPlayers);
+    }
     
     // Показываем анимацию победы, если осталась последняя карта
     if (state.lastCard && !victoryAnimationShown) {
@@ -790,6 +880,14 @@ socket.on('error', (message) => {
 socket.on('nicknameChanged', (data) => {
     myNickname = data.newNickname;
     showNotification(`Никнейм изменен на: ${data.newNickname}`, 'success');
+});
+
+socket.on('tournamentUpdate', (players) => {
+    updateTournamentList(players);
+});
+
+socket.on('info', (message) => {
+    showNotification(message, 'info');
 });
 
 // Функция обновления списка игроков
@@ -859,6 +957,59 @@ function updateCaptainsList(captains) {
     });
 }
 
+// Функция обновления списка участников турнира
+function updateTournamentList(players) {
+    tournamentPlayersList.innerHTML = '';
+    tournamentCount.textContent = Object.keys(players).length;
+    
+    // Сортируем игроков по времени присоединения
+    const sortedPlayers = Object.values(players).sort((a, b) => 
+        new Date(a.joinTime) - new Date(b.joinTime)
+    );
+    
+    sortedPlayers.forEach((player, index) => {
+        const playerElement = document.createElement('div');
+        playerElement.style.padding = '8px';
+        playerElement.style.marginBottom = '5px';
+        playerElement.style.background = 'rgba(0,255,255,0.1)';
+        playerElement.style.borderRadius = '5px';
+        playerElement.style.border = '1px solid rgba(0,255,255,0.3)';
+        playerElement.style.fontSize = '0.8rem';
+        
+        const playerInfo = document.createElement('div');
+        playerInfo.style.display = 'flex';
+        playerInfo.style.justifyContent = 'space-between';
+        playerInfo.style.alignItems = 'center';
+        
+        const playerName = document.createElement('div');
+        playerName.textContent = `${index + 1}. ${player.nickname}`;
+        playerName.style.color = '#00ffff';
+        playerName.style.fontWeight = 'bold';
+        
+        const playerStatus = document.createElement('div');
+        const isOnline = gameState.players && gameState.players[player.id];
+        playerStatus.textContent = isOnline ? '🟢' : '🔴';
+        playerStatus.title = isOnline ? 'В сети' : 'Не в сети';
+        
+        playerInfo.appendChild(playerName);
+        playerInfo.appendChild(playerStatus);
+        playerElement.appendChild(playerInfo);
+        
+        // Подсвечиваем текущего игрока
+        if (player.id === socket.id) {
+            playerElement.style.background = 'rgba(0,255,255,0.2)';
+            playerElement.style.border = '2px solid #00ffff';
+            isInTournament = true;
+            updateTournamentButtons();
+        }
+        
+        tournamentPlayersList.appendChild(playerElement);
+    });
+    
+    // Обновляем состояние кнопок
+    updateTournamentButtons();
+}
+
 // Функция обновления кнопок капитана
 function updateCaptainButtons() {
     const captainsCount = Object.keys(gameState.captains || {}).length;
@@ -869,7 +1020,7 @@ function updateCaptainButtons() {
         leaveCaptainBtn.disabled = false;
         leaveCaptainBtn.textContent = 'Перестать быть капитаном';
     } else {
-        becomeCaptainBtn.style.display = 'block'; // Убедитесь, что это 'block'
+        becomeCaptainBtn.style.display = 'block';
         leaveCaptainBtn.style.display = 'none';
         becomeCaptainBtn.disabled = captainsCount >= 2;
         
@@ -877,6 +1028,26 @@ function updateCaptainButtons() {
             becomeCaptainBtn.textContent = 'Достигнут лимит капитанов (2)';
         } else {
             becomeCaptainBtn.textContent = 'Стать капитаном';
+        }
+    }
+}
+
+// Функция обновления кнопок турнира
+function updateTournamentButtons() {
+    const tournamentPlayersCount = Object.keys(gameState.tournamentPlayers || {}).length;
+    
+    if (isInTournament) {
+        joinTournamentBtn.style.display = 'none';
+        leaveTournamentBtn.style.display = 'block';
+    } else {
+        joinTournamentBtn.style.display = 'block';
+        leaveTournamentBtn.style.display = 'none';
+        joinTournamentBtn.disabled = tournamentPlayersCount >= 10;
+        
+        if (tournamentPlayersCount >= 10) {
+            joinTournamentBtn.textContent = 'Лимит участников (10)';
+        } else {
+            joinTournamentBtn.textContent = 'Участвовать в 5x5';
         }
     }
 }
