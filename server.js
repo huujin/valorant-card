@@ -41,6 +41,7 @@ let gameState = {
     gameActive: false,
     players: {},
     captains: {},
+    tournamentPlayers: {}, // Добавьте эту строку
     lastCard: false
 };
 
@@ -51,6 +52,7 @@ io.on('connection', (socket) => {
     socket.emit('gameState', gameState);
     socket.emit('playersUpdate', gameState.players);
     socket.emit('captainsUpdate', gameState.captains);
+    socket.emit('tournamentUpdate', gameState.tournamentPlayers); // Добавьте эту строку
 
     // Обработка присоединения к игре
     socket.on('joinGame', (nickname) => {
@@ -70,7 +72,7 @@ io.on('connection', (socket) => {
             id: socket.id,
             nickname, 
             playerNumber, 
-            isCaptain: false, // Все начинают не капитанами
+            isCaptain: false,
             ready: true 
         };
         
@@ -152,35 +154,96 @@ io.on('connection', (socket) => {
         io.emit('captainsUpdate', gameState.captains);
         io.emit('gameState', gameState);
     });
-    // Добавьте этот обработчик в server.js после обработчика leaveCaptain
-socket.on('changeNickname', (newNickname) => {
-    const player = gameState.players[socket.id];
+
+    // Обработка смены никнейма
+    socket.on('changeNickname', (newNickname) => {
+        const player = gameState.players[socket.id];
+        
+        if (!player) {
+            socket.emit('error', 'Сначала присоединитесь к игре');
+            return;
+        }
+        
+        const oldNickname = player.nickname;
+        player.nickname = newNickname;
+        
+        // Обновляем никнейм в списке капитанов если игрок капитан
+        if (gameState.captains[socket.id]) {
+            gameState.captains[socket.id].nickname = newNickname;
+        }
+        
+        // Обновляем никнейм в списке турнира если игрок участвует
+        if (gameState.tournamentPlayers[socket.id]) {
+            gameState.tournamentPlayers[socket.id].nickname = newNickname;
+        }
+        
+        console.log(`Игрок ${oldNickname} сменил никнейм на ${newNickname}`);
+        
+        // Уведомляем всех об обновлении
+        io.emit('playersUpdate', gameState.players);
+        io.emit('captainsUpdate', gameState.captains);
+        io.emit('tournamentUpdate', gameState.tournamentPlayers);
+        
+        // Уведомляем самого игрока об успешной смене
+        socket.emit('nicknameChanged', { newNickname });
+        
+        // Уведомляем других игроков
+        socket.broadcast.emit('info', `Игрок ${oldNickname} сменил никнейм на ${newNickname}`);
+    });
+
+    // Обработка регистрации на турнир
+    socket.on('joinTournament', () => {
+        const player = gameState.players[socket.id];
+        
+        if (!player) {
+            socket.emit('error', 'Сначала присоединитесь к игре');
+            return;
+        }
+        
+        if (gameState.tournamentPlayers[socket.id]) {
+            socket.emit('error', 'Вы уже участвуете в турнире');
+            return;
+        }
+        
+        if (Object.keys(gameState.tournamentPlayers).length >= 10) {
+            socket.emit('error', 'Достигнут лимит участников (10)');
+            return;
+        }
+        
+        // Добавляем игрока в турнир
+        gameState.tournamentPlayers[socket.id] = {
+            id: socket.id,
+            nickname: player.nickname,
+            playerNumber: player.playerNumber,
+            joinTime: new Date().toISOString()
+        };
+        
+        console.log(`Игрок ${player.nickname} присоединился к турниру 5x5`);
+        
+        // Уведомляем всех об обновлении
+        io.emit('tournamentUpdate', gameState.tournamentPlayers);
+        socket.broadcast.emit('info', `${player.nickname} присоединился к турниру 5x5`);
+    });
+
+    // Обработка отмены регистрации на турнир
+    socket.on('leaveTournament', () => {
+        const player = gameState.players[socket.id];
+        
+        if (!player || !gameState.tournamentPlayers[socket.id]) {
+            socket.emit('error', 'Вы не участвуете в турнире');
+            return;
+        }
+        
+        // Удаляем игрока из турнира
+        delete gameState.tournamentPlayers[socket.id];
+        
+        console.log(`Игрок ${player.nickname} покинул турнир 5x5`);
+        
+        // Уведомляем всех об обновлении
+        io.emit('tournamentUpdate', gameState.tournamentPlayers);
+        socket.broadcast.emit('info', `${player.nickname} покинул турнир 5x5`);
+    });
     
-    if (!player) {
-        socket.emit('error', 'Сначала присоединитесь к игре');
-        return;
-    }
-    
-    const oldNickname = player.nickname;
-    player.nickname = newNickname;
-    
-    // Обновляем никнейм в списке капитанов если игрок капитан
-    if (gameState.captains[socket.id]) {
-        gameState.captains[socket.id].nickname = newNickname;
-    }
-    
-    console.log(`Игрок ${oldNickname} сменил никнейм на ${newNickname}`);
-    
-    // Уведомляем всех об обновлении
-    io.emit('playersUpdate', gameState.players);
-    io.emit('captainsUpdate', gameState.captains);
-    
-    // Уведомляем самого игрока об успешной смене
-    socket.emit('nicknameChanged', { newNickname });
-    
-    // Уведомляем других игроков
-    socket.broadcast.emit('info', `Игрок ${oldNickname} сменил никнейм на ${newNickname}`);
-});
     // Обработка удаления карты
     socket.on('removeCard', (cardId) => {
         if (!gameState.gameActive) return;
@@ -236,6 +299,7 @@ socket.on('changeNickname', (newNickname) => {
             gameActive: Object.keys(gameState.captains).length >= 2,
             players: gameState.players,
             captains: gameState.captains,
+            tournamentPlayers: gameState.tournamentPlayers, // Сохраняем участников турнира
             lastCard: false
         };
         
@@ -247,9 +311,12 @@ socket.on('changeNickname', (newNickname) => {
     socket.on('disconnect', () => {
         console.log('Игрок отключился:', socket.id);
         
-        // Удаляем игрока из всех списков
+        const player = gameState.players[socket.id];
+        
+        // Удаляем игрока из всех списков, кроме турнира
         delete gameState.players[socket.id];
         delete gameState.captains[socket.id];
+        // Игрок остается в tournamentPlayers даже после дисконнекта
         
         // Если осталось меньше 2 капитанов, останавливаем игру
         if (Object.keys(gameState.captains).length < 2 && gameState.gameActive) {
