@@ -293,6 +293,8 @@ io.on('connection', (socket) => {
         // Уведомляем всех об обновлении
         io.emit('tournamentUpdate', gameState.tournamentPlayers);
         socket.broadcast.emit('info', `${player.nickname} покинул турнир 5x5`);
+        // После успешного выхода из турнира
+        socket.emit('tournamentLeft');
     });
 
     // Обработка сброса всего состояния

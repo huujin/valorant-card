@@ -843,6 +843,13 @@
             }
         });
 
+        // Обработчик успешного выхода из турнира
+        socket.on('tournamentLeft', () => {
+            isInTournament = false;
+            updateTournamentButtons();
+            showNotification('Вы вышли из турнира', 'info');
+        });
+
         // Обработчики событий от сервера
         socket.on('connect', () => {
             console.log('Подключено к серверу');
@@ -1013,6 +1020,9 @@
             tournamentPlayersList.innerHTML = '';
             tournamentCount.textContent = Object.keys(players).length;
             
+            // Сбрасываем состояние участия и проверяем заново
+            isInTournament = false;
+            
             // Сортируем игроков по времени присоединения
             const sortedPlayers = Object.values(players).sort((a, b) => 
                 new Date(a.joinTime) - new Date(b.joinTime)
@@ -1039,7 +1049,7 @@
                 if (player.deviceId === deviceId) {
                     playerElement.style.background = 'rgba(0,255,255,0.2)';
                     playerElement.style.border = '2px solid #00ffff';
-                    isInTournament = true;
+                    isInTournament = true; // Устанавливаем флаг здесь
                 }
                 
                 tournamentPlayersList.appendChild(playerElement);
