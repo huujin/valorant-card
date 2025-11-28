@@ -483,12 +483,20 @@
         <div id="playersList">
             <!-- Список игроков будет здесь -->
         </div>
+        
+        <div style="margin-top: 20px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+            <button id="becomeCaptainBtn" style="width: 100%; padding: 12px; background: #ffcc00; color: #333; border: none; border-radius: 5px; font-size: 0.9rem; cursor: pointer; margin-bottom: 10px; font-weight: bold; display: none;">Стать капитаном</button>
+            <button id="leaveCaptainBtn" style="width: 100%; padding: 12px; background: #666; color: white; border: none; border-radius: 5px; font-size: 0.9rem; cursor: pointer; display: none;">Перестать быть капитаном</button>
+            <div style="font-size: 0.8rem; color: #ccc; text-align: center; margin-top: 10px;">
+                Капитанов: <span id="captainsCount">0</span>/2
+            </div>
+        </div>
+        
         <div id="captainsSection" style="margin-top: 30px; display: none;">
             <h4 style="color: #ffcc00; margin-bottom: 15px; text-align: center;">Капитаны</h4>
             <div id="captainsList">
                 <!-- Список капитанов будет здесь -->
             </div>
-            <button id="becomeCaptainBtn" style="width: 100%; padding: 10px; background: #ffcc00; color: #333; border: none; border-radius: 5px; font-size: 0.9rem; cursor: pointer; margin-top: 15px; font-weight: bold;">Стать капитаном</button>
         </div>
     </div>
 
@@ -543,6 +551,7 @@
         let myNickname = '';
         let isCaptain = false;
 
+        
         // Элементы DOM
         const connectionInfo = document.getElementById('connectionInfo');
         const statusElement = document.getElementById('status');
@@ -565,6 +574,7 @@
         const captainsSection = document.getElementById('captainsSection');
         const captainsList = document.getElementById('captainsList');
         const becomeCaptainBtn = document.getElementById('becomeCaptainBtn');
+        const leaveCaptainBtn = document.getElementById('leaveCaptainBtn');
 
         // Добавьте в начало скрипта (после объявления переменных)
         console.log('Script loaded, modal element:', nicknameModal);
@@ -718,10 +728,11 @@
                 playersList.appendChild(playerElement);
             });
         }
-
+        
         // Функция обновления списка капитанов
         function updateCaptainsList(captains) {
             captainsList.innerHTML = '';
+            document.getElementById('captainsCount').textContent = Object.keys(captains).length;
             
             Object.values(captains).forEach(captain => {
                 const captainElement = document.createElement('div');
